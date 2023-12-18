@@ -1,31 +1,36 @@
 pipeline {
-  agent any
-  options {
-    buildDiscarder(logRotator(numToKeepStr: '5'))
-  }
   environment {
-    DOCKERHUB_CREDENTIALS = credentials('dockerhub')
+    registry = "lionnelpat/jenkins-hub"
+    registryCredential = 'dockerhub'
+    dockerImage = ''
   }
+  agent any
   stages {
-    stage('Build') {
+    stage('Cloning our Git') {
       steps {
-        sh 'docker build -t lionnelpat/jenkins-hub .'
+        git 'https://github.com/lionnelpat/jenkins-hub.git'
       }
     }
-    stage('Login') {
-      steps {
-        sh 'echo $DOCKERHUB_CREDENTIALS_PSW | docker login -u $DOCKERHUB_CREDENTIALS_USR --password-stdin'
+    stage('Building our image') {
+      steps{
+        script {
+          dockerImage = docker.build registry + ":$BUILD_NUMBER"
+        }
       }
     }
-    stage('Push') {
-      steps {
-        sh 'docker push lionnelpat/jenkins-hub'
+    stage('Deploy our image') {
+      steps{
+        script {
+          docker.withRegistry( '', registryCredential ) {
+            dockerImage.push()
+          }
+        }
       }
     }
-  }
-  post {
-    always {
-      sh 'docker logout'
+    stage('Cleaning up') {
+      steps{
+        sh "docker rmi $registry:$BUILD_NUMBER"
+      }
     }
   }
 }
